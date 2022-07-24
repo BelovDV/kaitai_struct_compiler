@@ -80,8 +80,8 @@ class RibbitTranslator(provider: TypeProvider, importList: ImportList)
   }
 
   override def doName(s: String): String = {
-    println(10083)
-    ""
+    System.err.println(10083, s)
+    s
   }
 
   override def doEnumByLabel(enumTypeAbs: List[String], label: String): String = {
