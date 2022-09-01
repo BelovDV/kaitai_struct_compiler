@@ -31,15 +31,16 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
     compileClass(topClass)
 
     out.puts("/// Fix-sized list of elements of format `T`.")
-    out.puts("data list(len: '64, T: data) {")
+    out.puts("data std_list(len: '64, T: data) {")
     out.inc
     out.puts("if 'ne(len, 0) {")
     out.inc
     out.puts("head: T,")
-    out.puts("tail: list('dec(len), T),")
+    out.puts("tail: std_list('dec(len), T),")
     out.dec
-    out.puts("}\n}")
+    out.puts("}")
     out.dec
+    out.puts("}")
 
     CompileLog.SpecSuccess(
       "",
@@ -76,17 +77,27 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
   }
 
   def outField(attr: AttrSpec, name: String, attr_type: String): Unit = {
-    attr.cond.repeat match {
+    val t = attr.cond.repeat match {
       case RepeatExpr(expr) =>
         out.puts("/// RepeatExpr")
         def rep = translator.translate(expr)
-        out.puts(name + ": list(" + rep + ", " + attr_type + "),")
+        "std_list(" + rep + ", " + attr_type + ")"
       case RepeatUntil(ex) =>
-        out.puts("ERROR: Repeat until")
+        "ERROR: Repeat until"
       case RepeatEos =>
-        out.puts("ERROR: Repeat eos")
+        "ERROR: Repeat eos"
       case NoRepeat =>
-        out.puts(name + ": " + attr_type + ",")
+        attr_type
+    }
+    if (attr.cond.ifExpr.isDefined) {
+      out.puts(name + ": if " + "condition" + " {")
+      out.inc
+      out.puts(t)
+      out.dec
+      out.puts("},")
+    }
+    else {
+      out.puts(name + ": " + t + ",")
     }
   }
 
@@ -101,8 +112,8 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
     debug(attr)
     universalDoc(attr.doc)
     if (attr.valid.isDefined) {
-      out.puts("/// condition")
-      out.puts("/// " + attr.valid.get.toString())
+      out.puts("/// valid")
+      out.puts("/// " + attr.valid.get.toString)
     }
     data2type(attr.dataType)
   }
@@ -132,7 +143,26 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
     debug(bytes)
     bytes match {
       case BytesLimitType(size, terminator, include, padRight, process) =>
+        if (terminator.isDefined) {
+          out.puts("/// MAYBE ERROR: BytesLimitType terminator")
+        }
+        if (padRight.isDefined) {
+          out.puts("/// FIXME: BytesLimitType padRight")
+        }
+        if (!include) {
+          out.puts("/// MAYBE ERROR: BytesLimitType not include")
+        }
         bytes_str(translator.translate(size), None)
+      case BytesTerminatedType(
+            terminator,
+            include,
+            consume,
+            eosError,
+            process
+          ) =>
+        debug("FIXME: include, consume")
+        debug("UNKNOWN: eosError")
+        "std_bytes_terminated(" + terminator.toString + ")"
       case _ => "ERROR bytes2type " + bytes.toString
     }
   }
