@@ -26,6 +26,8 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
   def nowClassName = provider.nowClass.name
   var currentTable: String = ""
 
+  var counter: Int = 0
+
   override def compile: CompileLog.SpecSuccess = {
 
     compileClass(topClass)
@@ -56,6 +58,10 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
   def compileClass(curClass: ClassSpec): Unit = {
     provider.nowClass = curClass
     val className = curClass.name
+
+    curClass.instances.foreach { case (instName, _) =>
+      out.puts("/// ERROR: instance " + instName.name)
+    }
 
     universalDoc(curClass.doc)
     debug(className)
@@ -95,8 +101,7 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
       out.puts(t)
       out.dec
       out.puts("},")
-    }
-    else {
+    } else {
       out.puts(name + ": " + t + ",")
     }
   }
@@ -131,12 +136,20 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
       }
       case ut: UserType =>
         if (ut.name.length != 1) {
-          "ERROR in attrToString: UserType " + ut.name.length.toString
+          "ERROR in data2type: UserType " + ut.name.length.toString
         } else {
           ut.name.head + "()"
         }
       case bytes: BytesType => bytes2type(bytes)
-      case _                => "ERROR in attrToString: _ " + data.toString
+      case st: SwitchType => {
+        st.cases.foreach { case (caseExpr, caseType) =>
+          debug("This may be done by creating new type with if")
+          debug("To do so should be created func to create type")
+          debug("   or set of additional types")
+        }
+        ""
+      }
+      case _ => "ERROR in data2type: _ " + data.toString
     }
   }
   def bytes2type(bytes: BytesType): String = {
