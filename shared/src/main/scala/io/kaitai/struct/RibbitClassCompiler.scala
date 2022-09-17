@@ -22,10 +22,6 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
   val provider = new ClassTypeProvider(classSpecs, topClass)
   val translator = new RibbitTranslator(provider)
 
-  def nowClass: ClassSpec = provider.nowClass
-  def nowClassName = provider.nowClass.name
-  var currentTable: String = ""
-
   var counter: Int = 0
 
   override def compile: CompileLog.SpecSuccess = {
@@ -48,7 +44,7 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
       "",
       List(
         CompileLog.FileSuccess(
-          outFileName(topClass.nameAsStr),
+          topClass.fileName.get.replace(".ksy", ".gf"),
           out.result
         )
       )
@@ -56,24 +52,20 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
   }
 
   def compileClass(curClass: ClassSpec): Unit = {
+    debug(curClass)
     provider.nowClass = curClass
     val className = curClass.name
 
+    universalDoc(curClass.doc)
+    debug(className)
+    out.puts(s"/// data ${className.last}(_size: '64) {")
+    out.puts(s"data ${className.last}() {")
+    out.inc
+
+    curClass.seq.foreach(outAttr)
     curClass.instances.foreach { case (instName, _) =>
       out.puts("/// ERROR: instance " + instName.name)
     }
-
-    universalDoc(curClass.doc)
-    debug(className)
-    out.puts(s"data ${className.last} {")
-    out.inc
-
-    CalculateSeqSizes.forEachSeqAttr(
-      curClass,
-      (attr, seqPos, sizeElement, sizeContainer) => {
-        outField(attr, attrName(attr), attr2type(attr))
-      }
-    )
 
     out.dec
     out.puts("}")
@@ -82,13 +74,19 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
     curClass.types.foreach { case (_, intClass) => compileClass(intClass) }
   }
 
+  def outAttr(attr: AttrSpec): Unit = {
+    debug(attr)
+    outField(attr, attr2name(attr), attr2type(attr))
+  }
+
   def outField(attr: AttrSpec, name: String, attr_type: String): Unit = {
     val t = attr.cond.repeat match {
       case RepeatExpr(expr) =>
         out.puts("/// RepeatExpr")
         def rep = translator.translate(expr)
         "std_list(" + rep + ", " + attr_type + ")"
-      case RepeatUntil(ex) =>
+      case RepeatUntil(expr) =>
+        debug(expr)
         "ERROR: Repeat until"
       case RepeatEos =>
         "ERROR: Repeat eos"
@@ -106,7 +104,7 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
     }
   }
 
-  def attrName(attr: AttrSpec): String = {
+  def attr2name(attr: AttrSpec): String = {
     attr.id match {
       case NamedIdentifier(name) => name
       case _                     => "ERROR in attrName"
@@ -138,18 +136,56 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
         if (ut.name.length != 1) {
           "ERROR in data2type: UserType " + ut.name.length.toString
         } else {
-          ut.name.head + "()"
+          userType2type(ut)
         }
       case bytes: BytesType => bytes2type(bytes)
       case st: SwitchType => {
+        debug("This may be done by creating new type with if")
+        debug("To do so should be created func to create type")
+        debug("   or set of additional types")
         st.cases.foreach { case (caseExpr, caseType) =>
-          debug("This may be done by creating new type with if")
-          debug("To do so should be created func to create type")
-          debug("   or set of additional types")
+          debug(caseExpr)
+          debug(caseType)
         }
-        ""
+        "ERROR: switch type"
       }
       case _ => "ERROR in data2type: _ " + data.toString
+    }
+  }
+  def userType2type(ut: UserType): String = {
+    if (ut.args.toArray.size > 0) {
+      out.puts("/// MAYBE ERROR: " + ut.args.toString)
+    }
+    ut match {
+      case UserTypeFromBytes(_name, _forcedParent, _args, bytes, process) =>
+        bytes match {
+          case BytesEosType(terminator, include, padRight, process) => {
+            out.puts("placeholder: bytes(_parent_size - _already_taken_size)")
+            _name.head + "(" + "_parent_size - _already_taken_size" + ")"
+          }
+          case BytesLimitType(size, terminator, include, padRight, process) => {
+            out.puts("placeholder: bytes(" + translator.translate(size) + ")")
+            out.puts("/// TODO: next member should be at(...)")
+            _name.head + "(" + translator.translate(size) + ")"
+          }
+          case BytesTerminatedType(
+                terminator,
+                include,
+                consume,
+                eosError,
+                process
+              ) => {
+            out.puts("placeholder: bytes(???)")
+            _name.head + "(" + "ERROR: BytesTerminatedType" + ")"
+          }
+        }
+      case UserTypeInstream(_name, _forcedParent, _args) => {
+        _name.head + "()"
+      }
+      case _ => {
+        debug(ut)
+        "ERROR in userType2type"
+      }
     }
   }
   def bytes2type(bytes: BytesType): String = {
@@ -166,13 +202,7 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
           out.puts("/// MAYBE ERROR: BytesLimitType not include")
         }
         bytes_str(translator.translate(size), None)
-      case BytesTerminatedType(
-            terminator,
-            include,
-            consume,
-            eosError,
-            process
-          ) =>
+      case BytesTerminatedType(terminator, _, _, eosError, process) =>
         debug("FIXME: include, consume")
         debug("UNKNOWN: eosError")
         "std_bytes_terminated(" + terminator.toString + ")"
@@ -192,7 +222,6 @@ class RibbitClassCompiler(classSpecs: ClassSpecs, topClass: ClassSpec)
     }
   }
 
-  def outFileName(topClassName: String): String = s"$topClassName.gf"
   def debug(info: Any): Unit = out.puts("\t\t\t\t\t\t\t\t/// " + info)
   def universalDoc(doc: DocSpec): Unit = {
     if (doc.summary.isDefined) {

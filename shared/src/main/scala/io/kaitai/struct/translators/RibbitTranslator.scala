@@ -34,9 +34,9 @@ class RibbitTranslator(provider: TypeProvider)
   }
   override def binOp(op: Ast.operator): String = {
     op match {
-      case Ast.operator.Add => "+"
-      case Ast.operator.Sub => "-"
-      case Ast.operator.Mult => "*"
+      case Ast.operator.Add => "add"
+      case Ast.operator.Sub => "sub"
+      case Ast.operator.Mult => "mus"
       case Ast.operator.Div => "/"
       case Ast.operator.Mod => "%"
       case Ast.operator.BitAnd => "&"
@@ -49,7 +49,7 @@ class RibbitTranslator(provider: TypeProvider)
   override def unaryOp(op: Ast.unaryop): String = op match {
     case Ast.unaryop.Invert => "'~"
     case Ast.unaryop.Minus => "'-"
-    case Ast.unaryop.Not => "'!"
+    case Ast.unaryop.Not => "'ne"
   }
 
   override def arrayFirst(a: Ast.expr): String = "ERROR: arrayFirst"
