@@ -95,6 +95,8 @@ object Main {
         new NimClassCompiler(specs, spec, config)
       case HtmlClassCompiler =>
         new HtmlClassCompiler(specs, spec)
+      case RibbitClassCompiler =>
+        new RibbitClassCompiler(specs, spec)
       case _ =>
         new ClassCompiler(specs, spec, config, lang)
     }
